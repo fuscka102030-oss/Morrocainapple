@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const multer = require('multer');
 
 // Load environment variables
 dotenv.config();
@@ -8,23 +9,21 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ============ CORS CONFIGURATION ============
-// Allow Netlify frontend to communicate with this backend
-app.use(cors({
-  origin: '*', // Allow ALL origins (Netlify + everything else)
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}));
+// CORS - Simple and bug-free
+app.use(cors({ origin: '*' }));
 
-// Preflight requests
-app.options('*', cors());
+// Body parser middleware
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// File upload configuration
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 50 * 1024 * 1024 }
+});
 
-// Logging middleware
+// Request logging middleware
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   next();
@@ -46,6 +45,47 @@ let DATABASE = {
 };
 
 // ============ API ROUTES ============
+
+/**
+ * POST /api/upload
+ * Upload file with error handling
+ */
+app.post('/api/upload', upload.single('file'), (req, res) => {
+  try {
+    console.log('[API] POST /api/upload');
+
+    if (!req.file) {
+      console.warn('[API] Upload: No file provided');
+      return res.status(400).json({ 
+        error: 'No file provided',
+        message: 'Please provide a file in the request'
+      });
+    }
+
+    console.log(`[API] File uploaded: ${req.file.originalname} (${req.file.size} bytes)`);
+
+    res.status(200).json({
+      success: true,
+      message: 'File uploaded successfully',
+      file: {
+        originalName: req.file.originalname,
+        size: req.file.size,
+        mimetype: req.file.mimetype,
+        encoding: req.file.encoding,
+        uploadedAt: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('[API] Upload error:', error);
+    console.error('[API] Stack:', error instanceof Error ? error.stack : 'No stack trace');
+    
+    res.status(500).json({
+      error: 'File upload failed',
+      message: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
 
 /**
  * GET /api/sync-data
@@ -290,3 +330,5 @@ process.on('SIGTERM', () => {
 });
 
 module.exports = app;
+
+// Force Redeploy Fix: 2025-11-23T00:00:00Z
