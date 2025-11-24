@@ -2,6 +2,7 @@
 const cors = require('cors');
 const dotenv = require('dotenv');
 const multer = require('multer');
+const bcryptjs = require('bcryptjs');
 
 // Load environment variables
 dotenv.config();
@@ -56,17 +57,89 @@ let DATABASE = {
 
 // ============ API ROUTES ============
 
+// ============ SETUP ROUTES ============
+
+/**
+ * GET /api/setup-admin
+ * Temporary route to create first admin account
+ * IMPORTANT: Delete this route after first use in production!
+ */
+app.get('/api/setup-admin', async (req, res) => {
+  try {
+    console.log('[API] GET /api/setup-admin - Setup admin route called');
+
+    // Check if admin already exists
+    const adminExists = DATABASE.users.find(u => u.email === 'fuscka123@gmail.com');
+    
+    if (adminExists) {
+      console.log('[API] Admin already exists');
+      return res.status(200).json({
+        success: false,
+        message: 'Admin already exists',
+        email: adminExists.email,
+        role: adminExists.role
+      });
+    }
+
+    // Hash the password
+    const hashedPassword = await bcryptjs.hash('123456', 10);
+    
+    // Create new admin user
+    const newAdmin = {
+      id: 'admin_' + Date.now(),
+      email: 'fuscka123@gmail.com',
+      password: hashedPassword, // Store hashed password
+      passwordPlaintext: '123456', // Store plaintext for reference (REMOVE IN PRODUCTION)
+      role: 'admin',
+      name: 'Administrator',
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    // Add to database
+    DATABASE.users.push(newAdmin);
+    DATABASE.lastUpdated = new Date().toISOString();
+
+    console.log('[API] ✅ Admin account created successfully');
+    console.log('[API] Email: fuscka123@gmail.com');
+    console.log('[API] Password: 123456');
+
+    res.status(201).json({
+      success: true,
+      message: 'Admin account created successfully!',
+      admin: {
+        id: newAdmin.id,
+        email: newAdmin.email,
+        role: newAdmin.role,
+        password_for_reference: '123456',
+        note: 'Please change this password after first login'
+      },
+      loginDetails: {
+        email: 'fuscka123@gmail.com',
+        password: '123456',
+        endpoint: '/api/auth/login'
+      }
+    });
+  } catch (error) {
+    console.error('[API] Setup admin error:', error);
+    res.status(500).json({
+      error: 'Failed to create admin account',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 // ============ AUTH ROUTES ============
 
 /**
  * POST /api/auth/login
  * Login with email and password
  */
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   try {
     console.log('[API] POST /api/auth/login');
     console.log('[API] Request body:', JSON.stringify(req.body));
-    console.log('[API] Database users:', DATABASE.users.map(u => ({ email: u.email, pass: u.password })));
     
     const { email, password } = req.body;
 
@@ -87,10 +160,11 @@ app.post('/api/auth/login', (req, res) => {
       });
     }
 
-    // Check password (NOTE: In production, use bcrypt.compare())
-    console.log('[API] Checking password. Provided:', password, 'Stored:', user.password, 'Match:', password === user.password);
+    // Check password with bcrypt
+    const passwordMatch = await bcryptjs.compare(password, user.password);
+    console.log('[API] Password match:', passwordMatch);
     
-    if (user.password !== password) {
+    if (!passwordMatch) {
       console.error('[API] Password mismatch');
       return res.status(401).json({ 
         error: 'Invalid email or password' 
