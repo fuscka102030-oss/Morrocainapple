@@ -3,12 +3,14 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const multer = require('multer');
 const bcryptjs = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 // CORS - Simple and bug-free
 app.use(cors({ origin: '*' }));
@@ -124,65 +126,98 @@ app.get('/api/setup-admin', async (req, res) => {
 
 /**
  * POST /api/auth/login
- * Login with email and password
+ * Login with email and password - Returns JWT token
  */
 app.post('/api/auth/login', async (req, res) => {
   try {
-    console.log('[API] POST /api/auth/login');
-    console.log('[API] Request body:', JSON.stringify(req.body));
+    console.log('[LOGIN] ========================================');
+    console.log('[LOGIN] Attempt for:', req.body.email);
     
     const { email, password } = req.body;
 
+    // Validate input
     if (!email || !password) {
-      console.error('[API] Missing email or password');
+      console.error('[LOGIN] Missing email or password');
       return res.status(400).json({ 
         error: 'Email and password are required' 
       });
     }
 
-    const user = DATABASE.users.find(u => u.email === email);
-    console.log('[API] User found:', user ? 'YES' : 'NO');
-
-    if (!user) {
-      console.error('[API] User not found for email:', email);
-      return res.status(401).json({ 
-        error: 'Invalid email or password' 
-      });
-    }
-
-    // Check password with bcrypt
-    const passwordMatch = await bcryptjs.compare(password, user.password);
-    console.log('[API] Password match:', passwordMatch);
+    // Find user by email
+    console.log('[LOGIN] Searching for user in database...');
+    console.log('[LOGIN] Total users in DB:', DATABASE.users.length);
     
-    if (!passwordMatch) {
-      console.error('[API] Password mismatch');
-      return res.status(401).json({ 
-        error: 'Invalid email or password' 
+    const user = DATABASE.users.find(u => u.email === email);
+    
+    if (!user) {
+      console.error('[LOGIN] ❌ User not found:', email);
+      return res.status(400).json({ 
+        error: 'User not found' 
       });
     }
 
+    console.log('[LOGIN] ✓ User found:', user.email);
+    console.log('[LOGIN] Comparing passwords with bcrypt...');
+    console.log('[LOGIN] Stored hash starts with: $2a$...');
+
+    // Compare password using bcrypt
+    let isMatch = false;
+    try {
+      isMatch = await bcryptjs.compare(password, user.password);
+    } catch (bcryptError) {
+      console.error('[LOGIN] Bcrypt error:', bcryptError.message);
+      return res.status(500).json({ 
+        error: 'Password comparison failed',
+        details: bcryptError.message 
+      });
+    }
+
+    console.log('[LOGIN] Password valid:', isMatch);
+
+    if (!isMatch) {
+      console.error('[LOGIN] ❌ Password mismatch for:', email);
+      return res.status(401).json({ 
+        error: 'Invalid credentials' 
+      });
+    }
+
+    // Check if account is active
     if (!user.isActive) {
-      console.error('[API] User account inactive');
+      console.error('[LOGIN] User account inactive:', email);
       return res.status(403).json({ 
         error: 'User account is inactive' 
       });
     }
 
-    console.log(`[API] ✅ User logged in successfully: ${email}`);
+    // Generate JWT token
+    const token = jwt.sign(
+      {
+        id: user.id,
+        email: user.email,
+        role: user.role
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    console.log('[LOGIN] ✅ Login successful for:', email);
+    console.log('[LOGIN] JWT token generated');
+    console.log('[LOGIN] ========================================');
 
     res.status(200).json({
       success: true,
+      message: 'Login successful',
+      token: token,
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role,
-        createdAt: user.createdAt
-      },
-      message: 'Login successful'
+        role: user.role
+      }
     });
   } catch (error) {
-    console.error('[API] Login error:', error);
+    console.error('[LOGIN] ❌ Unexpected error:', error.message);
+    console.error('[LOGIN] Stack:', error.stack);
     res.status(500).json({ 
       error: 'Login failed',
       message: error instanceof Error ? error.message : 'Unknown error'
