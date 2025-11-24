@@ -34,17 +34,7 @@ app.use((req, res, next) => {
 // This stores your data. Replace with real DB later.
 let DATABASE = {
   products: [],
-  users: [
-    {
-      id: 'admin_001',
-      email: 'fuscka123@gmail.com',
-      password: 'Oussama1230', // NOTE: In production, hash this with bcrypt
-      role: 'admin',
-      name: 'Administrator',
-      createdAt: new Date().toISOString(),
-      isActive: true
-    }
-  ],
+  users: [],
   orders: [],
   heroContent: {
     title: 'Welcome to Moroccan Apple',
