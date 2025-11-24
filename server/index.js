@@ -1,4 +1,4 @@
-const express = require('express');
+        const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const multer = require('multer');
@@ -33,7 +33,17 @@ app.use((req, res, next) => {
 // This stores your data. Replace with real DB later.
 let DATABASE = {
   products: [],
-  users: [],
+  users: [
+    {
+      id: 'admin_001',
+      email: 'fuscka123@gmail.com',
+      password: 'Oussama1230', // NOTE: In production, hash this with bcrypt
+      role: 'admin',
+      name: 'Administrator',
+      createdAt: new Date().toISOString(),
+      isActive: true
+    }
+  ],
   orders: [],
   heroContent: {
     title: 'Welcome to Moroccan Apple',
@@ -45,6 +55,90 @@ let DATABASE = {
 };
 
 // ============ API ROUTES ============
+
+// ============ AUTH ROUTES ============
+
+/**
+ * POST /api/auth/login
+ * Login with email and password
+ */
+app.post('/api/auth/login', (req, res) => {
+  try {
+    console.log('[API] POST /api/auth/login');
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ 
+        error: 'Email and password are required' 
+      });
+    }
+
+    const user = DATABASE.users.find(u => u.email === email);
+
+    if (!user) {
+      return res.status(401).json({ 
+        error: 'Invalid email or password' 
+      });
+    }
+
+    // Check password (NOTE: In production, use bcrypt.compare())
+    if (user.password !== password) {
+      return res.status(401).json({ 
+        error: 'Invalid email or password' 
+      });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({ 
+        error: 'User account is inactive' 
+      });
+    }
+
+    console.log(`[API] User logged in: ${email}`);
+
+    res.status(200).json({
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        createdAt: user.createdAt
+      },
+      message: 'Login successful'
+    });
+  } catch (error) {
+    console.error('[API] Login error:', error);
+    res.status(500).json({ 
+      error: 'Login failed',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /api/auth/users
+ * Get all users (admin only)
+ */
+app.get('/api/auth/users', (req, res) => {
+  try {
+    console.log('[API] GET /api/auth/users');
+    res.status(200).json({
+      success: true,
+      users: DATABASE.users.map(u => ({
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        role: u.role,
+        isActive: u.isActive,
+        createdAt: u.createdAt
+      }))
+    });
+  } catch (error) {
+    console.error('[API] Error fetching users:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
 
 /**
  * POST /api/upload
