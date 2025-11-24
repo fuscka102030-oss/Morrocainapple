@@ -65,36 +65,46 @@ let DATABASE = {
 app.post('/api/auth/login', (req, res) => {
   try {
     console.log('[API] POST /api/auth/login');
+    console.log('[API] Request body:', JSON.stringify(req.body));
+    console.log('[API] Database users:', DATABASE.users.map(u => ({ email: u.email, pass: u.password })));
+    
     const { email, password } = req.body;
 
     if (!email || !password) {
+      console.error('[API] Missing email or password');
       return res.status(400).json({ 
         error: 'Email and password are required' 
       });
     }
 
     const user = DATABASE.users.find(u => u.email === email);
+    console.log('[API] User found:', user ? 'YES' : 'NO');
 
     if (!user) {
+      console.error('[API] User not found for email:', email);
       return res.status(401).json({ 
         error: 'Invalid email or password' 
       });
     }
 
     // Check password (NOTE: In production, use bcrypt.compare())
+    console.log('[API] Checking password. Provided:', password, 'Stored:', user.password, 'Match:', password === user.password);
+    
     if (user.password !== password) {
+      console.error('[API] Password mismatch');
       return res.status(401).json({ 
         error: 'Invalid email or password' 
       });
     }
 
     if (!user.isActive) {
+      console.error('[API] User account inactive');
       return res.status(403).json({ 
         error: 'User account is inactive' 
       });
     }
 
-    console.log(`[API] User logged in: ${email}`);
+    console.log(`[API] ✅ User logged in successfully: ${email}`);
 
     res.status(200).json({
       success: true,
@@ -114,6 +124,24 @@ app.post('/api/auth/login', (req, res) => {
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
+});
+
+/**
+ * GET /api/auth/test
+ * Test endpoint to verify admin account exists
+ */
+app.get('/api/auth/test', (req, res) => {
+  console.log('[API] GET /api/auth/test');
+  res.status(200).json({
+    message: 'Test endpoint',
+    adminExists: DATABASE.users.some(u => u.email === 'fuscka123@gmail.com'),
+    users: DATABASE.users.map(u => ({
+      id: u.id,
+      email: u.email,
+      role: u.role,
+      isActive: u.isActive
+    }))
+  });
 });
 
 /**
